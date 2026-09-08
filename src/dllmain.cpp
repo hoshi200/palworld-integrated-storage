@@ -475,7 +475,7 @@ static UObject* srvStorageOf(UObject* camp) {
 //! DISCOVERY RECONCILE (authority; ~8s correctness pass). Rebuilds guild state from GROUND TRUTH and
 //! cross-registers every guild chest's model into every same-guild camp's storage module so the native
 //! build/craft flow can CONSUME cross-camp. Two enumerations:
-//!   (a) every chest concrete model from the UPalMapObjectManager (TMap @0x310, raw sparse-array walk, no
+//!   (a) every chest concrete model from the UPalMapObjectManager (TMap @0x328, raw sparse-array walk, no
 //!       FindAllOf) -> group by CURRENT camp + guild; also record instance-id -> camp for the channel read.
 //!   (b) EVERY base camp incl. EMPTY ones (FindAllOf) -> add its storage to its guild bucket so an empty
 //!       camp is a cross-registration TARGET. Without (b) an empty camp is never discovered (discovery is
@@ -487,7 +487,7 @@ static void srvDiscoverReconcile() {
     if (g_isSrv != 1) return;
     UObject* mgr = UObjectGlobals::FindFirstOf(STR("PalMapObjectManager"));
     if (!mgr) return;
-    uint8_t* mm = (uint8_t*)mgr + 0x310;                        // MapObjectConcreteModelMapForServer (TMap)
+    uint8_t* mm = (uint8_t*)mgr + 0x328;                        // MapObjectConcreteModelMapForServer (TMap)
     uint8_t* elems  = *(uint8_t**)(mm + 0x00);                  // sparse-array element buffer
     int32_t  maxIdx = *(int32_t*)(mm + 0x08);                   // slots incl. holes (== NumBits)
     uint32_t* words = *(uint32_t**)(mm + 0x20); if (!words) words = (uint32_t*)(mm + 0x10);   // allocation bits
