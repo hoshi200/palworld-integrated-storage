@@ -22,7 +22,7 @@ jobs:
         fetch-depth: 1
 
     - name: Install xmake
-      uses: xmake-io/github-ci-setup@v1
+      uses: xmake-io/github-action-setup-xmake@v1
       with:
         xmake-version: latest
 
