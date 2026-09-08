@@ -1,0 +1,58 @@
+name: Build Mod DLL
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout mod source (this fork)
+      uses: actions/checkout@v4
+
+    - name: Checkout UE4SS source tree
+      uses: actions/checkout@v4
+      with:
+        repository: UE4SS-RE/RE-UE4SS
+        submodules: recursive
+        path: RE-UE4SS
+        fetch-depth: 1
+
+    - name: Install xmake
+      uses: xmake-io/github-ci-setup@v1
+      with:
+        xmake-version: latest
+
+    - name: Place mod into UE4SS cppmods tree
+      shell: pwsh
+      run: |
+        $dst = "RE-UE4SS/cppmods/ModIntegratedStorageCpp"
+        New-Item -ItemType Directory -Force -Path $dst | Out-Null
+        Copy-Item -Path "src/*" -Destination $dst -Recurse -Force
+        # Register the mod target the same way UE4SS registers its own cppmods
+        Add-Content -Path "RE-UE4SS/cppmods/xmake.lua" -Value 'includes("ModIntegratedStorageCpp")'
+
+    - name: Build (Release x64)
+      shell: pwsh
+      working-directory: RE-UE4SS
+      run: |
+        xmake f -m release -y
+        xmake build -y ModIntegratedStorageCpp
+
+    - name: Collect built DLL
+      shell: pwsh
+      run: |
+        $dll = Get-ChildItem -Path RE-UE4SS/build -Recurse -Filter "ModIntegratedStorageCpp.dll" | Select-Object -First 1
+        if (-not $dll) { throw "ModIntegratedStorageCpp.dll not found in build output" }
+        Write-Host "Built: $($dll.FullName)"
+        Copy-Item $dll.FullName -Destination "ModIntegratedStorageCpp.dll"
+
+    - name: Upload DLL artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ModIntegratedStorageCpp-dll
+        path: ModIntegratedStorageCpp.dll
+        if-no-files-found: error
