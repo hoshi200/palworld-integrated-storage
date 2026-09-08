@@ -13,39 +13,47 @@ jobs:
     - name: Checkout mod source (this fork)
       uses: actions/checkout@v4
 
-    - name: Checkout UE4SS source tree
+    # RE-UE4SS main cannot be cloned publicly anymore: its deps/first/Unreal
+    # (UEPseudo) submodule is private. HorseMod vendors a complete,
+    # self-contained RE-UE4SS tree with all Unreal pseudo deps as real dirs,
+    # and is actively maintained (verified buildable for cpp mods via CMake).
+    - name: Checkout HorseMod tree (vendored self-contained RE-UE4SS)
       uses: actions/checkout@v4
       with:
-        repository: UE4SS-RE/RE-UE4SS
-        submodules: recursive
-        path: RE-UE4SS
+        repository: FottenSC/HorseMod
+        path: HorseMod
         fetch-depth: 1
 
-    - name: Install xmake
-      uses: xmake-io/github-action-setup-xmake@v1
-      with:
-        xmake-version: latest
+    - name: Set up MSVC environment (cl + Ninja)
+      uses: ilammy/msvc-dev-cmd@v1
 
-    - name: Place mod into UE4SS cppmods tree
+    - name: Inject ModIntegratedStorageCpp into the build tree
       shell: pwsh
       run: |
-        $dst = "RE-UE4SS/cppmods/ModIntegratedStorageCpp"
-        New-Item -ItemType Directory -Force -Path $dst | Out-Null
-        Copy-Item -Path "src/*" -Destination $dst -Recurse -Force
-        # Register the mod target the same way UE4SS registers its own cppmods
-        Add-Content -Path "RE-UE4SS/cppmods/xmake.lua" -Value 'includes("ModIntegratedStorageCpp")'
+        $modDir = "HorseMod/ModIntegratedStorageCpp"
+        New-Item -ItemType Directory -Force -Path "$modDir/src" | Out-Null
+        Copy-Item -Path "src/dllmain.cpp" -Destination "$modDir/src/dllmain.cpp"
+        @'
+        set(TARGET ModIntegratedStorageCpp)
+        add_library(${TARGET} SHARED src/dllmain.cpp)
+        # UE4SS re-exports (PUBLIC) its include dirs, fmt, PolyHook_2, ... so
+        # linking UE4SS covers everything dllmain.cpp includes.
+        target_link_libraries(${TARGET} PUBLIC UE4SS)
+        '@ | Set-Content -Encoding utf8NoBOM "$modDir/CMakeLists.txt"
+        Add-Content -Path "HorseMod/CMakeLists.txt" -Value "add_subdirectory(ModIntegratedStorageCpp)"
 
-    - name: Build (Release x64)
+    - name: Configure (Palworld = UE 5.1 -> Game__Shipping__Win64)
       shell: pwsh
-      working-directory: RE-UE4SS
-      run: |
-        xmake f -m release -y
-        xmake build -y ModIntegratedStorageCpp
+      run: cmake -B build -S HorseMod -G Ninja -DCMAKE_BUILD_TYPE=Game__Shipping__Win64
+
+    - name: Build mod target
+      shell: pwsh
+      run: cmake --build build --target ModIntegratedStorageCpp --parallel $env:NUMBER_OF_PROCESSORS
 
     - name: Collect built DLL
       shell: pwsh
       run: |
-        $dll = Get-ChildItem -Path RE-UE4SS/build -Recurse -Filter "ModIntegratedStorageCpp.dll" | Select-Object -First 1
+        $dll = Get-ChildItem -Path build -Recurse -Filter "ModIntegratedStorageCpp.dll" | Select-Object -First 1
         if (-not $dll) { throw "ModIntegratedStorageCpp.dll not found in build output" }
         Write-Host "Built: $($dll.FullName)"
         Copy-Item $dll.FullName -Destination "ModIntegratedStorageCpp.dll"
